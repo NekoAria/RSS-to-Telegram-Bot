@@ -62,7 +62,6 @@ class Feed(Model, Base):
     interval = fields.SmallIntField(null=True, description='Monitoring task interval. '
                                                            'Should be the minimal interval of all subs to the feed,'
                                                            'default interval will be applied if null')
-    entry_hashes = fields.JSONField(null=True, description='Hashes (CRC32) of entries')
     etag = fields.CharField(max_length=128, null=True,
                             description='The etag of webpage, will be changed each time the feed is updated. '
                                         'Can be null because some websites do not support')
@@ -74,12 +73,32 @@ class Feed(Model, Base):
                                            description='Next checking time. '
                                                        'If too many errors occur, let us wait sometime')
     subs: fields.ReverseRelation['Sub']
+    caches: fields.ReverseRelation['Cache']
 
     class Meta:
         table = 'feed'
 
     def __str__(self):
         return self.link
+
+
+class Cache(Model, Base):
+    """
+    Cache model.
+
+    Stores feed's entry hashes.
+    """
+    id = fields.IntField(pk=True)
+    feed: fields.ForeignKeyRelation['Feed'] = \
+        fields.ForeignKeyField('models.Feed', related_name='caches', to_field='id', on_delete=fields.CASCADE)
+    entry_hash = fields.CharField(max_length=8, null=True, description='Hash (CRC32) of entry')
+
+    class Meta:
+        table = 'cache'
+        unique_together = ('feed_id', 'entry_hash')  # will also be indexed
+
+    def __str__(self):
+        return self.entry_hash
 
 
 class Sub(Model, Base):

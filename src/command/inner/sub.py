@@ -55,8 +55,9 @@ async def sub(user_id: int, feed_url: str, lang: Optional[str] = None) -> dict[s
                 http_caching_d = get_http_caching_headers(wf.headers)
                 feed.etag = http_caching_d['ETag']
                 feed.last_modified = http_caching_d['Last-Modified']
-                feed.entry_hashes = [get_hash(entry.get('guid') or entry.get('link')) for entry in rss_d.entries]
                 await feed.save()  # now we get the id
+                entry_hashes = [get_hash(entry.get('guid') or entry.get('link')) for entry in rss_d.entries]
+                await db.Cache.bulk_create([db.Cache(feed=feed, entry_hash=_hash) for _hash in entry_hashes])
                 db.effective_utils.EffectiveTasks.update(feed.id)
 
         if not _sub:  # create a new sub if needed
@@ -221,7 +222,6 @@ async def migrate_to_new_url(feed: db.Feed, new_url: str) -> Union[bool, db.Feed
     # new_url has been occupied by another feed
     new_url_feed.state = 1
     new_url_feed.title = feed.title
-    new_url_feed.entry_hashes = feed.entry_hashes
     new_url_feed.etag = feed.etag
     new_url_feed.last_modified = feed.last_modified
     new_url_feed.error_count = 0

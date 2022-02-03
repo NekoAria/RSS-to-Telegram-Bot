@@ -9,6 +9,7 @@ logger = log.getLogger('RSStT.db')
 
 User = models.User
 Feed = models.Feed
+Cache = models.Cache
 Sub = models.Sub
 Option = models.Option
 EffectiveOptions = effective_utils.EffectiveOptions

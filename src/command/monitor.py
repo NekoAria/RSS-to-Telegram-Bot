@@ -137,6 +137,8 @@ async def __monitor(feed: db.Feed) -> str:
     :return: monitoring result
     """
     now = datetime.now(timezone.utc)
+    cache_expiration = db.EffectiveOptions.cache_expiration
+    expiration = now - timedelta(days=cache_expiration)
     if feed.next_check_time and now < feed.next_check_time:
         return SKIPPED  # skip this monitor task
 
@@ -181,27 +183,29 @@ async def __monitor(feed: db.Feed) -> str:
         return EMPTY
 
     # sequence matters so we cannot use a set
-    old_hashes: list = feed.entry_hashes if isinstance(feed.entry_hashes, list) else []
+    old_hashes = await db.Cache.filter(feed=feed).values_list("entry_hash", flat=True)
     updated_hashes = []
     updated_entries = []
+    old_hashes_to_update = []
     for entry in rss_d.entries:
         guid = entry.get('guid') or entry.get('link')
         if not guid:
             continue  # IDK why there are some feeds containing entries w/o a link, should we set up a feed hospital?
         h = get_hash(guid)
         if h in old_hashes:
+            old_hashes_to_update.append(h)
             continue
         updated_hashes.append(h)
         updated_entries.append(entry)
+    await db.Cache.filter(feed=feed, entry_hash__in=old_hashes_to_update).update(updated_at=now)
+    await db.Cache.filter(feed=feed, updated_at__lt=expiration).delete()
 
     if not updated_hashes:  # not updated
         logger.debug(f'Fetched (not updated): {feed.link}')
         return NOT_UPDATED
 
     logger.debug(f'Updated: {feed.link}')
-    length = max(len(rss_d.entries) * 2, 100)
-    new_hashes = updated_hashes + old_hashes[:length - len(updated_hashes)]
-    feed.entry_hashes = new_hashes
+    await db.Cache.bulk_create([db.Cache(feed=feed, entry_hash=_hash) for _hash in updated_hashes])
     http_caching_d = inner.utils.get_http_caching_headers(wf.headers)
     feed.etag = http_caching_d['ETag']
     feed.last_modified = http_caching_d['Last-Modified']
