@@ -8,6 +8,14 @@ from multidict import CIMultiDict, istr
 I18N_PATH = path.split(path.realpath(__file__))[0]
 ALL_LANGUAGES = tuple(lang[:-5] for lang in listdir(I18N_PATH) if lang.endswith('.json'))
 FALLBACK_LANGUAGE = istr('en')
+NO_FALLBACK_KEYS = {istr('iso_639_code')}
+
+NEED_PRE_FILL = {
+    # istr('default_emoji_header_description'):
+    #     ('↩',),
+    istr('read_formatting_settings_guidebook_html'):
+        ('https://github.com/Rongronggg9/RSS-to-Telegram-Bot/blob/dev/docs/formatting-settings.md',),
+}
 
 
 class _I18N:
@@ -75,6 +83,7 @@ class _I18N:
                 f"<b>/unsub_all</b>: {l10n.html_escaped('cmd_description_unsub_all')}\n"
                 f"<b>/list</b>: {l10n.html_escaped('cmd_description_list')}\n"
                 f"<b>/set</b>: {l10n.html_escaped('cmd_description_set')}\n"
+                f"<b>/set_default</b>: {l10n.html_escaped('cmd_description_set_default')}\n"
                 f"<b>/import</b>: {l10n.html_escaped('cmd_description_import')}\n"
                 f"<b>/export</b>: {l10n.html_escaped('cmd_description_export')}\n"
                 f"<b>/activate_subs</b>: {l10n.html_escaped('cmd_description_activate_subs')}\n"
@@ -98,13 +107,18 @@ class _L10N:
             assert isinstance(value, dict)
             for k, v in value.items():
                 assert isinstance(v, str) and k not in l10n_d_flatten
+                if v and k in NEED_PRE_FILL:
+                    try:
+                        v = v % NEED_PRE_FILL[k]
+                    except TypeError:
+                        v = ""
                 l10n_d_flatten[k] = v
         self.__l10n_lang = CIMultiDict(l10n_d_flatten)
 
     def key_exist(self, key: str):
-        return key in self.__l10n_lang
+        return key in self.__l10n_lang and (self.__l10n_lang[key] or key in NO_FALLBACK_KEYS)
 
-    def __getitem__(self, key: str):
+    def __getitem__(self, key: str) -> str:
         if self.key_exist(key):
             return self.__l10n_lang[key]
         elif self.__lang_code != FALLBACK_LANGUAGE:

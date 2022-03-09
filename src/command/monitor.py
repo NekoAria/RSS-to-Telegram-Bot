@@ -4,9 +4,11 @@ from collections.abc import MutableMapping
 from src.compat import Final
 
 import asyncio
+from html import unescape
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from collections import defaultdict, Counter
+from traceback import format_exc
 
 from . import inner
 from .utils import escape_html
@@ -15,6 +17,7 @@ from src import log, db, env, web
 from src.exceptions import EntityNotFoundError, UserBlockedErrors
 from src.i18n import i18n
 from src.parsing.post import get_post_from_entry, Post
+from src.parsing.utils import html_space_stripper
 
 logger = log.getLogger('RSStT.monitor')
 
@@ -95,7 +98,7 @@ async def run_monitor_task():
     skipped = 0
     timeout = 0
 
-    for r in result:
+    for f, r in zip(feeds, result):
         if r is NOT_UPDATED:
             not_updated += 1
         elif r is CACHED:
@@ -112,7 +115,7 @@ async def run_monitor_task():
             skipped += 1
         elif isinstance(r, asyncio.TimeoutError):
             timeout += 1
-            timeout_errors.append(r)
+            timeout_errors.append((f, r))
         elif isinstance(r, BaseException):
             raise r
         else:
@@ -122,8 +125,8 @@ async def run_monitor_task():
     if timeout_errors:
         logger.error(f'Timeout detected during a feeds monitoring task, '
                      f'totally {timeout} feed(s) timed out after {wait_for}s:')
-        for index, error in enumerate(timeout_errors):
-            logger.error(f'The TimeoutError of the {index}th feed in the task:', exc_info=error)
+        for feed, error in timeout_errors:
+            logger.error(f'The TimeoutError of the feed ({feed.link}) in the task:', exc_info=error)
 
 
 async def __monitor(feed: db.Feed) -> str:
@@ -180,6 +183,7 @@ async def __monitor(feed: db.Feed) -> str:
         return EMPTY
 
     title = rss_d.feed.title
+    title = html_space_stripper(title) if title else ''
     if title != feed.title:
         logger.debug(f'Feed title changed ({feed.title} -> {title}): {feed.link}')
         feed.title = title
@@ -227,41 +231,70 @@ async def __notify_all(feed: db.Feed, entry: MutableMapping):
     subs = await db.Sub.filter(feed=feed, state=1)
     if not subs:  # nobody has subbed it
         await update_interval(feed)
-    post = get_post_from_entry(entry, feed.title, feed.link)
-    await post.generate_message()
+    link = entry.get('link')
+    try:
+        post = get_post_from_entry(entry, feed.title, feed.link)
+    except Exception as e:
+        logger.error(f'Failed to parse the post {link} (feed: {feed.link}) from entry:', exc_info=e)
+        try:
+            error_message = Post(f'Something went wrong while parsing the post {link} '
+                                 f'(feed: {feed.link}). '
+                                 f'Please check:<br><br>' +
+                                 format_exc().replace('\n', '<br>'),
+                                 feed_title=feed.title, link=link)
+            await error_message.send_formatted_post(env.MANAGER, send_mode=2)
+        except Exception as e:
+            logger.error(f'Failed to send parsing error message for {link} (feed: {feed.link}):', exc_info=e)
+            await env.bot.send_message(env.MANAGER, f'A parsing error message cannot be sent, please check the logs.')
+        return
     await asyncio.gather(
         *(__send(sub, post) for sub in subs)
     )
 
 
 async def __send(sub: db.Sub, post: Union[str, Post]):
-    # TODO: customized format
     user_id = sub.user_id
     try:
         try:
-            await env.bot.get_input_entity(user_id)  # verify that the input entity can be gotten first
-        except ValueError:  # cannot get the input entity, the bot may be banned by the user
-            raise EntityNotFoundError(user_id)
-        if isinstance(post, str):
-            await env.bot.send_message(user_id, post, parse_mode='html', silent=not sub.notify)
-            return
-        await post.send_message(user_id, silent=not sub.notify)
-        if __user_blocked_counter[user_id]:  # reset the counter if success
-            del __user_blocked_counter[user_id]
-    except UserBlockedErrors as e:
-        user_unsub_all_lock = __user_unsub_all_lock_bucket[user_id]
-        if user_unsub_all_lock.locked():
-            return  # no need to unsub twice!
-        async with user_unsub_all_lock:
-            # TODO: leave the group/channel if still in it
-            if __user_blocked_counter[user_id] < 5:
-                __user_blocked_counter[user_id] += 1
-                return  # skip once
-            # fail for 5 times, consider been banned
-            del __user_blocked_counter[user_id]
-            if await inner.utils.have_subs(user_id):
-                logger.error(f'User blocked ({e.__class__.__name__}): {user_id}')
-                await inner.sub.unsub_all(user_id)
+            try:
+                await env.bot.get_input_entity(user_id)  # verify that the input entity can be gotten first
+            except ValueError:  # cannot get the input entity, the bot may be banned by the user
+                raise EntityNotFoundError(user_id)
+            if isinstance(post, str):
+                await env.bot.send_message(user_id, post, parse_mode='html', silent=not sub.notify)
+                return
+            await post.send_formatted_post_according_to_sub(sub)
+            if __user_blocked_counter[user_id]:  # reset the counter if success
+                del __user_blocked_counter[user_id]
+        except UserBlockedErrors as e:
+            user_unsub_all_lock = __user_unsub_all_lock_bucket[user_id]
+            if user_unsub_all_lock.locked():
+                return  # no need to unsub twice!
+            async with user_unsub_all_lock:
+                # TODO: leave the group/channel if still in it
+                if __user_blocked_counter[user_id] < 5:
+                    __user_blocked_counter[user_id] += 1
+                    return  # skip once
+                # fail for 5 times, consider been banned
+                del __user_blocked_counter[user_id]
+                if await inner.utils.have_subs(user_id):
+                    logger.error(f'User blocked ({type(e).__name__}): {user_id}')
+                    await inner.sub.unsub_all(user_id)
+    except Exception as e:
+        logger.error(f'Failed to send {post.link} (feed: {post.feed_link}, user: {sub.user_id}):', exc_info=e)
+        try:
+            error_message = Post(f'Something went wrong while sending this post '
+                                 f'(feed: {post.feed_link}, user: {sub.user_id}). '
+                                 f'Please check:<br><br>' +
+                                 format_exc().replace('\n', '<br>'),
+                                 title=post.title, feed_title=post.feed_title, link=post.link, author=post.author,
+                                 feed_link=post.feed_link)
+            await error_message.send_formatted_post(env.MANAGER, send_mode=2)
+        except Exception as e:
+            logger.error(f'Failed to send sending error message for {post.link} '
+                         f'(feed: {post.feed_link}, user: {sub.user_id}):',
+                         exc_info=e)
+            await env.bot.send_message(env.MANAGER, f'An sending error message cannot be sent, please check the logs.')
 
 
 async def __deactivate_feed_and_notify_all(feed: db.Feed, reason: Union[web.WebError, str] = None):
