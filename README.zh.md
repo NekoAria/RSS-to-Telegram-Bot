@@ -31,7 +31,17 @@
 
 [使用 RSStT 的频道]: docs/channels-using-rsstt.md
 
-[![Deploy on Railway](https://railway.app/button.svg)](docs/deployment-guide.md#option-2-railwayapp)
+| [![Deploy on Railway][railway_button]][railway_guide] | [![Deploy to Heroku][heroku_button]][heroku_guide] |
+|:-----------------------------------------------------:|:--------------------------------------------------:|
+
+[railway_button]: https://railway.app/button.svg
+
+[heroku_button]: https://www.herokucdn.com/deploy/button.svg
+
+[railway_guide]: docs/deployment-guide.md#option-2-railwayapp
+
+[heroku_guide]: docs/deployment-guide.md#option-3-heroku
+
 
 **重要**: 如果你有自己的 RSStT bot (v1)，请阅读[迁移指南](docs/migration-guide-v2.zh.md) 来了解如何迁移到 v2。
 
@@ -52,7 +62,7 @@
     - 自动显示作者名 (可自定义)
     - 自动切分超长消息
         - 如果配置了 Telegraph，消息会通过 Telegraph 发出 (可自定义)
-- [丰富的自定义格式设定V](docs/formatting-settings.md)
+- [丰富的自定义格式设定](docs/formatting-settings.md)
     - Hashtag、自定义标题，等等
 - 为 Telegram 和 RSS 源配置独立的代理设置
 - OPML 导入和导出 (保持自定义标题)

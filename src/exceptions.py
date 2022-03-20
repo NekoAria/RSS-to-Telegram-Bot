@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Union
 
 from telethon.errors import (
@@ -5,7 +6,7 @@ from telethon.errors import (
     PhotoInvalidDimensionsError, PhotoSaveFileInvalidError, PhotoInvalidError, PhotoCropSizeSmallError,
     PhotoContentUrlEmptyError, PhotoContentTypeInvalidError, GroupedMediaInvalidError, MediaGroupedInvalidError,
     MediaInvalidError, VideoContentTypeInvalidError, VideoFileInvalidError, ExternalUrlInvalidError,
-    WebpageCurlFailedError, WebpageMediaEmptyError, MediaEmptyError
+    WebpageCurlFailedError, WebpageMediaEmptyError, MediaEmptyError, ChatAdminRequiredError
 )
 
 
@@ -16,7 +17,7 @@ class EntityNotFoundError(ValueError):
 
 
 UserBlockedErrors: tuple = (UserIsBlockedError, UserIdInvalidError, ChatWriteForbiddenError, ChannelPrivateError,
-                            InputUserDeactivatedError, EntityNotFoundError)
+                            InputUserDeactivatedError, ChatAdminRequiredError, EntityNotFoundError)
 InvalidMediaErrors: tuple = (PhotoInvalidDimensionsError, PhotoSaveFileInvalidError, PhotoInvalidError,
                              PhotoCropSizeSmallError, PhotoContentUrlEmptyError, PhotoContentTypeInvalidError,
                              GroupedMediaInvalidError, MediaGroupedInvalidError, MediaInvalidError,

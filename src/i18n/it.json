@@ -28,6 +28,8 @@
         "message_too_long_prompt": "Il comando avrebbe dovuto essere eseguito correttamente, ma il messaggio di ritorno è troppo lungo e non può essere inviato."
     },
     "l10n_permission_denied_reasons": {
+        "channel_or_group_not_found": "",
+        "permission_denied_no_permission": "",
         "permission_denied_not_bot_manager": "Questo comando può essere usato solo dal bot manager.",
         "permission_denied_not_chat_admin": "Questo comando può essere usato solo dagli amministratori di questo gruppo/canale.",
         "permission_denied_not_in_private_chat": "Questo comando può essere usato solo in una chat privata.",
@@ -51,7 +53,10 @@
         "processing": "Elaborazione, si prega di attendere un momento…",
         "canceled_by_user": "Annullato dall'utente.",
         "n_subscriptions_in_total": "%d abbonamenti in totale",
-        "other_settings_button": ""
+        "other_settings_button": "",
+        "user": "",
+        "channel": "",
+        "group": ""
     },
     "l10n_cmd_sub": {
         "sub_reply_feed_url_prompt_html": "Si prega di inserire l'URL di un feed RSS. \nOppure, puoi usare <code>/sub url1 url2 url3 …</code> per iscriverti in massa.",
@@ -72,6 +77,7 @@
     },
     "l10n_cmd_import": {
         "send_opml_prompt": "Per favore inviatemi il file OPML da importare (il nome dell'estensione deve essere .opml).",
+        "import_for_channel_or_group_prompt": "",
         "send_opml_reply_placeholder": "Il file OPML da importare (l'estensione deve essere .opml)",
         "fetch_file_failed": "Fallito il recupero del file",
         "opml_import_processing": "Se il numero di feed è grande o i server dei feed sono lenti, l'attesa può essere lunga. Siediti e rilassati.",
@@ -96,19 +102,24 @@
         "length_limit": "",
         "length_limit_unlimited": "",
         "link_preview": "",
+        "link_preview_-1": "",
         "link_preview_0": "",
         "link_preview_1": "",
         "display_media": "",
         "display_media_-1": "",
         "display_media_0": "",
+        "display_media_1": "",
         "display_author": "",
         "display_author_-1": "",
         "display_author_0": "",
         "display_author_1": "",
         "display_via": "",
+        "display_via_-4": "",
+        "display_via_-3": "",
         "display_via_-2": "",
         "display_via_-1": "",
         "display_via_0": "",
+        "display_via_1": "",
         "display_title": "",
         "display_title_-1": "",
         "display_title_0": "",
@@ -179,7 +190,20 @@
         "option_value_type": "Tipo di valore",
         "option_key_invalid": "Il tasto opzione non è valido",
         "option_value_invalid": "Il valore dell'opzione non è valido, controlla il suo tipo",
-        "option_updated": "L'opzione è stata aggiornata"
+        "option_updated": "L'opzione è stata aggiornata",
+        "cmd_user_info_usage_prompt_html": "",
+        "user_not_found": "",
+        "user_info": "",
+        "sub_count": "",
+        "participant_count": "",
+        "user_state": "",
+        "user_state_-1": "",
+        "user_state_description_-1": "",
+        "user_state_0": "",
+        "user_state_description_0": "",
+        "user_state_1": "",
+        "user_state_description_1": "",
+        "set_user_state_as": ""
     },
     "l10n_cmd_descriptions": {
         "commands": "Comandi",
@@ -197,6 +221,8 @@
         "cmd_description_lang": "Selezionare una lingua",
         "cmd_description_help": "Visualizza l'aiuto",
         "cmd_description_test": "Test (solo manager di bot)",
-        "cmd_description_set_option": "Imposta le opzioni del bot (solo per il bot manager)"
+        "cmd_description_set_option": "Imposta le opzioni del bot (solo per il bot manager)",
+        "cmd_description_user_info": "",
+        "usage_in_channel_or_group_prompt_html": ""
     }
 }

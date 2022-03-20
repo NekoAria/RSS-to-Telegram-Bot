@@ -5,15 +5,14 @@ from typing import Union, Optional
 import re
 from bs4 import BeautifulSoup
 from bs4.element import NavigableString, PageElement, Tag
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 from attr import define
 
 from src import web
-from .medium import Video, Image, Media, Animation, Audio, construct_images_weserv_nl_url
+from .medium import Video, Image, Media, Animation, Audio
 from .html_node import *
-from .utils import stripNewline, stripLineEnd, stripBr, is_absolute_link, emojify
+from .utils import stripNewline, stripLineEnd, isAbsoluteHttpLink, resolve_relative_link, emojify, is_emoticon
 
-isSmallIcon = re.compile(r'(width|height): ?(([012]?\d|30)(\.\d)?px|([01](\.\d)?|2)r?em)').search
 srcsetParser = re.compile(r'(?:^|,\s*)'
                           r'(?P<url>\S+)'  # allow comma here because it is valid in URL
                           r'(?:\s+'
@@ -46,20 +45,31 @@ class Parser:
             raise RuntimeError('You must parse the HTML first')
         return stripNewline(stripLineEnd(self.html_tree.get_html().strip()))
 
-    async def _parse_item(self, soup: Union[PageElement, BeautifulSoup, Tag, NavigableString, Iterable[PageElement]]):
+    async def _parse_item(self, soup: Union[PageElement, BeautifulSoup, Tag, NavigableString, Iterable[PageElement]]) \
+            -> Optional[Text]:
         result = []
         if isinstance(soup, Iterator):  # a Tag is also Iterable, but we only expect an Iterator here
+            prev_tag_name = None
             for child in soup:
                 item = await self._parse_item(child)
                 if item:
+                    tag_name = child.name if isinstance(child, Tag) else None
+                    if (tag_name == 'div' or prev_tag_name == 'div') \
+                            and not (
+                            (result and result[-1].get_html().endswith('\n')) or item.get_html().startswith('\n')
+                    ):
+                        result.append(Br())
                     result.append(item)
+                    prev_tag_name = tag_name
+
             if not result:
                 return None
             return result[0] if len(result) == 1 else Text(result)
 
         if isinstance(soup, NavigableString):
             if type(soup) is NavigableString:
-                return Text(emojify(str(soup)))
+                text = str(soup)
+                return Text(emojify(text)) if text else None
             return None  # we do not expect a subclass of NavigableString here, drop it
 
         if not isinstance(soup, Tag):
@@ -70,15 +80,28 @@ class Parser:
             return None
 
         if tag == 'table':
-            return None  # drop table
+            rows = soup.findAll('tr')
+            if not rows:
+                return None
+            rows_content = []
+            for row in rows:
+                columns = row.findAll(('td', 'th'))
+                if len(columns) != 1:
+                    return None  # only support one column
+                row_content = await self._parse_item(columns[0])
+                if row_content:
+                    if row_content.get_html().endswith('\n'):
+                        rows_content.append(row_content)
+                        continue
+                    rows_content.extend((row_content, Br()))
+            return Text(rows_content) or None
 
         if tag == 'p' or tag == 'section':
             parent = soup.parent.name
             text = await self._parse_item(soup.children)
             if text:
                 return Text([Br(), text, Br()]) if parent != 'li' else text
-            else:
-                return None
+            return None
 
         if tag == 'blockquote':
             quote = await self._parse_item(soup.children)
@@ -103,22 +126,19 @@ class Parser:
             href = soup.get("href")
             if not href:
                 return None
-            if not is_absolute_link(href) and self.feed_link:
-                href = urljoin(self.feed_link, href)
-            return Link(await self._parse_item(soup.children), href)
+            href = resolve_relative_link(self.feed_link, href)
+            if not isAbsoluteHttpLink(href):
+                if href.startswith('javascript'):  # drop javascript links
+                    return text
+                return Text([Text(f'{text} ('), Code(href), Text(')')])
+            return Link(text, href)
 
         if tag == 'img':
             src, srcset = soup.get('src'), soup.get('srcset')
             if not (src or srcset):
                 return None
-            alt, _class = soup.get('alt', ''), soup.get('class', '')
-            style, width, height = soup.get('style', ''), soup.get('width', ''), soup.get('height', '')
-            width = int(width) if width and width.isdigit() else float('inf')
-            height = int(height) if height and height.isdigit() else float('inf')
-            # drop icons
-            if width <= 30 or height <= 30 or isSmallIcon(style) \
-                    or 'emoji' in _class or (alt.startswith(':') and alt.endswith(':')) \
-                    or (src and src.startswith('data:')):
+            if is_emoticon(soup):
+                alt = soup.get('alt')
                 return Text(emojify(alt)) if alt else None
             _multi_src = []
             if srcset:
@@ -153,8 +173,7 @@ class Parser:
             for _src in _multi_src:
                 if not isinstance(_src, str):
                     continue
-                if not is_absolute_link(_src) and self.feed_link:
-                    _src = urljoin(self.feed_link, _src)
+                _src = resolve_relative_link(self.feed_link, _src)
                 path = urlparse(_src).path
                 if path.endswith(('.gif', '.gifv', '.webm', '.mp4', '.m4v')):
                     is_gif = True
@@ -203,31 +222,33 @@ class Parser:
             text = await self._parse_item(soup.children)
             return Text([Br(2), Underline(text), Br()]) if text else None
 
-        if tag == 'li':
-            text = await self._parse_item(soup.children)
-            return ListItem(text) if text else None
-
         if tag == 'iframe':
             # text = await self._parse_item(soup.children)
             src = soup.get('src')
             if not src:
                 return None
-            if not is_absolute_link(src) and self.feed_link:
-                src = urljoin(self.feed_link, src)
+            src = resolve_relative_link(self.feed_link, src)
             title = await web.get_page_title(src)
             return Text([Br(2), Link(f'iframe ({title})', param=src), Br(2)])
 
-        in_list = tag == 'ol' or tag == 'ul'
-        for child in soup.children:
-            item = await self._parse_item(child)
-            if item and (not in_list or type(child) is not NavigableString):
-                result.append(item)
-        if tag == 'ol':
-            return OrderedList([Br(), *result, Br()])
-        elif tag == 'ul':
-            return UnorderedList([Br(), *result, Br()])
-        else:
-            return result[0] if len(result) == 1 else Text(result)
+        if tag == 'ol' or tag == 'ul':
+            texts = []
+            list_items = soup.findAll('li', recursive=False)
+            if not list_items:
+                return None
+            for list_item in list_items:
+                text = await self._parse_item(list_item)
+                if text and text.get_html().strip():
+                    texts.append(ListItem(text))
+            if not texts:
+                return None
+            if tag == 'ol':
+                return OrderedList([Br(), *texts, Br()])
+            elif tag == 'ul':
+                return UnorderedList([Br(), *texts, Br()])
+
+        text = await self._parse_item(soup.children)
+        return text or None
 
     def _get_multi_src(self, soup: Tag) -> list[str]:
         src = soup.get('src')
@@ -238,8 +259,7 @@ class Parser:
         for _src in _multi_src:
             if not isinstance(_src, str):
                 continue
-            if not is_absolute_link(_src) and self.feed_link:
-                _src = urljoin(self.feed_link, _src)
+            _src = resolve_relative_link(self.feed_link, _src)
             multi_src.append(_src)
         return multi_src
 

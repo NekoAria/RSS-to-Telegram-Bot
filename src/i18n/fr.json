@@ -28,6 +28,8 @@
         "message_too_long_prompt": ""
     },
     "l10n_permission_denied_reasons": {
+        "channel_or_group_not_found": "",
+        "permission_denied_no_permission": "",
         "permission_denied_not_bot_manager": "",
         "permission_denied_not_chat_admin": "",
         "permission_denied_not_in_private_chat": "Cette commande peut être utilisée seulement dans une disussion privée.",
@@ -51,7 +53,10 @@
         "processing": "Traitement en cours, veuillez patienter un instant…",
         "canceled_by_user": "Annulé par l'utilisateur.",
         "n_subscriptions_in_total": "%d abonnements au total",
-        "other_settings_button": ""
+        "other_settings_button": "",
+        "user": "",
+        "channel": "",
+        "group": ""
     },
     "l10n_cmd_sub": {
         "sub_reply_feed_url_prompt_html": "",
@@ -72,6 +77,7 @@
     },
     "l10n_cmd_import": {
         "send_opml_prompt": "",
+        "import_for_channel_or_group_prompt": "",
         "send_opml_reply_placeholder": "",
         "fetch_file_failed": "",
         "opml_import_processing": "",
@@ -96,19 +102,24 @@
         "length_limit": "",
         "length_limit_unlimited": "",
         "link_preview": "",
+        "link_preview_-1": "",
         "link_preview_0": "",
         "link_preview_1": "",
         "display_media": "",
         "display_media_-1": "",
         "display_media_0": "",
+        "display_media_1": "",
         "display_author": "",
         "display_author_-1": "",
         "display_author_0": "",
         "display_author_1": "",
         "display_via": "",
+        "display_via_-4": "",
+        "display_via_-3": "",
         "display_via_-2": "",
         "display_via_-1": "",
         "display_via_0": "",
+        "display_via_1": "",
         "display_title": "",
         "display_title_-1": "",
         "display_title_0": "",
@@ -179,7 +190,20 @@
         "option_value_type": "",
         "option_key_invalid": "",
         "option_value_invalid": "",
-        "option_updated": ""
+        "option_updated": "",
+        "cmd_user_info_usage_prompt_html": "",
+        "user_not_found": "",
+        "user_info": "",
+        "sub_count": "",
+        "participant_count": "",
+        "user_state": "",
+        "user_state_-1": "",
+        "user_state_description_-1": "",
+        "user_state_0": "",
+        "user_state_description_0": "",
+        "user_state_1": "",
+        "user_state_description_1": "",
+        "set_user_state_as": ""
     },
     "l10n_cmd_descriptions": {
         "commands": "",
@@ -197,6 +221,8 @@
         "cmd_description_lang": "",
         "cmd_description_help": "",
         "cmd_description_test": "",
-        "cmd_description_set_option": ""
+        "cmd_description_set_option": "",
+        "cmd_description_user_info": "",
+        "usage_in_channel_or_group_prompt_html": ""
     }
 }

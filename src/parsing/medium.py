@@ -12,25 +12,33 @@ from telethon.errors import FloodWaitError, SlowModeWaitError, ServerError
 from urllib.parse import urlencode
 
 from src import env, log, web, locks
-from src.parsing.html_node import Link, Br, Text, HtmlTree
+from .html_node import Code, Link, Br, Text, HtmlTree
+from .utils import isAbsoluteHttpLink
 from src.exceptions import InvalidMediaErrors, ExternalMediaFetchFailedErrors, UserBlockedErrors
 
 logger = log.getLogger('RSStT.medium')
 
-sinaimg_sizes = ['large', 'mw2048', 'mw1024', 'mw720', 'middle']
-sinaimg_size_parser = re.compile(r'(?P<domain>^https?://wx\d\.sinaimg\.\w+/)'
-                                 r'(?P<size>\w+)'
-                                 r'(?P<filename>/\w+\.\w+$)').match
-pixiv_sizes = ['original', 'master']
-pixiv_size_parser = re.compile(r'(?P<url_prefix>^https?://i\.pixiv\.(cat|re)/img-)'
-                               r'(?P<size>\w+)'
-                               r'(?P<url_infix>/img/\d{4}/(\d{2}/){5})'
-                               r'(?P<filename>\d+_p\d+)'
-                               r'(?P<file_ext>\.\w+$)').match
-sinaimg_server_parser = re.compile(r'(?P<url_prefix>^https?://wx)'
-                                   r'(?P<server_id>\d)'
-                                   r'(?P<url_suffix>\.sinaimg\.\S+$)').match
-isTelegramCannotFetch = re.compile(r'^https?://(\w+\.)?telesco\.pe').match
+sinaimg_sizes: Final = ('large', 'mw2048', 'mw1024', 'mw720', 'middle')
+sinaimg_size_parser: Final = re.compile(r'(?P<domain>^https?://wx\d\.sinaimg\.\w+/)'
+                                        r'(?P<size>\w+)'
+                                        r'(?P<filename>/\w+\.\w+$)').match
+pixiv_sizes: Final = ('original', 'master')
+pixiv_size_parser: Final = re.compile(r'(?P<url_prefix>^https?://i\.pixiv\.(cat|re)/img-)'
+                                      r'(?P<size>\w+)'
+                                      r'(?P<url_infix>/img/\d{4}/(\d{2}/){5})'
+                                      r'(?P<filename>\d+_p\d+)'
+                                      r'(?P<file_ext>\.\w+$)').match
+sinaimg_server_parser: Final = re.compile(r'(?P<url_prefix>^https?://wx)'
+                                          r'(?P<server_id>\d)'
+                                          r'(?P<url_suffix>\.sinaimg\.\S+$)').match
+# lizhi_sizes: Final = ('ud.mp3', 'hd.mp3', 'sd.m4a')  # ud.mp3 is rare
+lizhi_sizes: Final = ('hd.mp3', 'sd.m4a')
+lizhi_server_id: Final = ('1', '2', '5', '')
+lizhi_parser: Final = re.compile(r'(?P<url_prefix>^https?://cdn)'
+                                 r'(?P<server_id>[125]?)'
+                                 r'(?P<url_infix>\.lizhi\.fm/[\w/]+)'
+                                 r'(?P<size_suffix>([uh]d\.mp3|sd\.m4a)$)').match
+isTelegramCannotFetch: Final = re.compile(r'^https?://(\w+\.)?telesco\.pe').match
 
 IMAGE: Final = 'image'
 VIDEO: Final = 'video'
@@ -113,7 +121,7 @@ class Medium:
             (self.type_fallback_medium.type_fallback_chain()
              if self.need_type_fallback and self.type_fallback_medium is not None
              else None)
-        )
+        ) if not self.drop_silently else None
 
     async def upload(self, chat_id: int, force_upload: bool = False) \
             -> tuple[Optional[TypeMessageMedia], Optional[TypeMedium]]:
@@ -211,7 +219,11 @@ class Medium:
                 error_tries += 1
 
     def get_link_html_node(self):
-        return Link(self.type, param=self.original_urls[0])
+        url = self.original_urls[0]
+        if isAbsoluteHttpLink(url):
+            return Link(self.type, param=self.original_urls[0])
+        else:
+            return Text([Text(f'{self.type} ('), Code(url), Text(')')])
 
     async def validate(self, flush: bool = False) -> bool:
         if self.valid is not None and not flush:  # already validated
@@ -223,10 +235,18 @@ class Medium:
         async with self.validating_lock:
             while self.urls:
                 url = self.urls.pop(0)
+                if not isAbsoluteHttpLink(url):  # bypass non-http links
+                    continue
                 medium_info = await web.get_medium_info(url)
                 if medium_info is None:
                     continue
                 self.size, self.width, self.height, self.content_type = medium_info
+                if self.type == IMAGE and self.size <= self.maxSize and min(self.width, self.height) == -1 \
+                        and self.content_type and self.content_type.startswith('image') \
+                        and self.content_type.find('webp') == -1 and self.content_type.find('svg') == -1 \
+                        and not url.startswith(env.IMAGES_WESERV_NL):
+                    # enforcing dimension detection for images
+                    self.width, self.height = await detect_image_dimension_via_images_weserv_nl(url)
                 self.max_width = max(self.max_width, self.width)
                 self.max_height = max(self.max_height, self.height)
 
@@ -235,6 +255,7 @@ class Medium:
                     if 0 < self.width <= 30 or 0 < self.height < 30:
                         self.valid = False
                         self.drop_silently = True
+                        return False
                     # force convert WEBP/SVG to PNG
                     elif (
                             self.content_type
@@ -256,7 +277,7 @@ class Medium:
                             0.05 < self.width / self.height < 20
                             and
                             # Telegram downsizes images to fit 1280x1280. If not downsized a lot, passing
-                            max(self.max_width, self.max_height) <= 1280 * 1.5
+                            0 < max(self.max_width, self.max_height) <= 1280 * 1.5
                     ):
                         self.valid = True
                     # let long images fall back to file
@@ -265,6 +286,13 @@ class Medium:
                         self.urls = []  # clear the urls, force fall back to file
                 elif self.size <= self.maxSize:  # valid
                     self.valid = True
+                else:
+                    self.valid = False
+
+                # some images cannot be sent as file directly, if so, images.weserv.nl may help
+                if self.type == FILE and self.content_type and self.content_type.startswith('image') \
+                        and not url.startswith(env.IMAGES_WESERV_NL):
+                    self.urls.append(construct_images_weserv_nl_url_convert_to_jpg(url))
 
                 if self.valid:
                     self.chosen_url = url
@@ -412,9 +440,9 @@ class Image(Medium):
         if not sinaimg_server_match:  # is not a sinaimg img
             return await super().change_server()
 
-        self._server_change_count += 1
         if self._server_change_count >= 1:
             return False
+        self._server_change_count += 1
         parsed = sinaimg_server_match.groupdict()
         new_server_id = int(parsed['server_id']) + 1
         if new_server_id > 4:
@@ -437,6 +465,39 @@ class Audio(Medium):
     typeFallbackTo = None
     typeFallbackAllowSelfUrls = False
     inputMediaExternalType = InputMediaDocumentExternal
+
+    def __init__(self, url: Union[str, list[str]]):
+        super().__init__(url)
+        new_urls = []
+        for url in self.urls:
+            lizhi_match = lizhi_parser(url)
+            if not lizhi_match:
+                new_urls.append(url)
+                continue
+            parsed_lizhi = lizhi_match.groupdict()  # is a pixiv img
+            for size_suffix in lizhi_sizes:
+                new_url = parsed_lizhi['url_prefix'] + parsed_lizhi['server_id'] + parsed_lizhi['url_infix'] \
+                          + size_suffix
+                if new_url not in new_urls:
+                    new_urls.append(new_url)
+            if url not in new_urls:
+                new_urls.append(url)
+        self.urls = new_urls
+
+    async def change_server(self):
+        lizhi_match = lizhi_parser(self.chosen_url)
+        if not lizhi_match:  # is not a lizhi audio
+            return await super().change_server()
+
+        if self._server_change_count >= 1:
+            return False
+        self._server_change_count += 1
+        parsed = lizhi_match.groupdict()
+        server_id = parsed['server_id']
+        new_server_id = lizhi_server_id[lizhi_server_id.index(server_id) - 1] \
+            if server_id in lizhi_server_id else lizhi_server_id[0]
+        self.chosen_url = f"{parsed['url_prefix']}{new_server_id}{parsed['url_infix']}{parsed['size_suffix']}"
+        return True
 
 
 class Animation(Image):
@@ -515,23 +576,6 @@ class Media:
         :return: ((uploaded/original medium, medium type)), invalid media html node)
         """
         await self.validate()
-        async with self.modify_lock:
-            # at least a file and an image
-            if (
-                    sum(isinstance(medium.type_fallback_chain(), File)
-                        for medium in self._media
-                        if not medium.drop_silently) > 0
-                    and
-                    sum(isinstance(medium.type_fallback_chain(), Image)
-                        for medium in self._media
-                        if not medium.drop_silently) > 0
-            ):
-                # fall back all image to files
-                await asyncio.gather(
-                    *(medium.type_fallback()
-                      for medium in self._media
-                      if isinstance(medium.type_fallback_chain(), Image) and not medium.drop_silently)
-                )
 
         media_and_types: tuple[
             Union[tuple[Union[TypeMessageMedia, Medium, None], Optional[TypeMedium]], BaseException],
@@ -665,15 +709,35 @@ class Media:
 
 
 def construct_images_weserv_nl_url(url: str,
-                                   width: int = 1280,
-                                   height: int = 1280,
-                                   fit: str = 'inside',
-                                   output_format: str = 'png') -> str:
-    query_string = urlencode({
+                                   width: Optional[int] = 2560,
+                                   height: Optional[int] = 2560,
+                                   fit: Optional[str] = 'inside',
+                                   output_format: Optional[str] = 'png',
+                                   without_enlargement: Optional[bool] = True,
+                                   default_image: Optional[str] = None) -> str:
+    params = {
         'url': url,
         'w': width,
         'h': height,
         'fit': fit,
         'output': output_format,
-    })
+        'we': '1' if without_enlargement else None,
+        'default': default_image,
+    }
+    filtered_params = {k: v for k, v in params.items() if v is not None}
+    query_string = urlencode(filtered_params)
     return env.IMAGES_WESERV_NL + '?' + query_string
+
+
+def construct_images_weserv_nl_url_convert_to_jpg(url: str) -> str:
+    return construct_images_weserv_nl_url(url, width=None, height=None, fit=None, without_enlargement=None,
+                                          output_format='jpg')
+
+
+async def detect_image_dimension_via_images_weserv_nl(url: str) -> tuple[int, int]:
+    url = construct_images_weserv_nl_url_convert_to_jpg(url)
+    res = await web.get_medium_info(url)
+    if not res:
+        return -1, -1
+    _, width, height, _ = res
+    return width, height

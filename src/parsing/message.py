@@ -46,6 +46,9 @@ class MessageDispatcher:
             media_msg_count = len(media_and_types)
 
         if invalid_media_html:
+            invalid_media_html = (' '.join(invalid_media_html.split('\n'))
+                                  if len(invalid_media_html.split('\n')) == 2
+                                  else invalid_media_html)  # if only one invalid media, trim the newline
             self.html += '\n\n' + invalid_media_html
 
         if self.html:
@@ -54,7 +57,7 @@ class MessageDispatcher:
                                          head_count=media_msg_count or -1,
                                          length_limit_tail=4096)
         else:
-            tel = [(None, None)]
+            tel = []
 
         while tel:
             plain_text, format_entities = tel.pop(0)
@@ -122,6 +125,7 @@ class Message:
             )
         )
 
+    # noinspection PyProtectedMember
     async def send(self, reply_to: Union[int, types.Message, None] = None) \
             -> Optional[Union[types.Message, list[types.Message]]]:
         msg_lock, flood_lock = locks.user_msg_locks(self.user_id)

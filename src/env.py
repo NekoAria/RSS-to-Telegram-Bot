@@ -152,7 +152,7 @@ else:
 
 PROXY_BYPASS_PRIVATE: Final = __bool_parser(os.environ.get('PROXY_BYPASS_PRIVATE'))
 PROXY_BYPASS_DOMAINS: Final = __list_parser(os.environ.get('PROXY_BYPASS_DOMAINS'))
-USER_AGENT: Final = os.environ.get('USER_AGENT') or 'RSStT/2.1 RSS Reader'
+USER_AGENT: Final = os.environ.get('USER_AGENT') or 'RSStT/2.2 RSS Reader'
 IPV6_PRIOR: Final = __bool_parser(os.environ.get('IPV6_PRIOR'))
 
 # ----- img relay server config -----
@@ -177,6 +177,10 @@ del _database_url
 
 # ----- debug config -----
 DEBUG: Final = __bool_parser(os.environ.get('DEBUG'))
+
+# ----- environment config -----
+RAILWAY_STATIC_URL: Final = os.environ.get('RAILWAY_STATIC_URL')
+PORT: Final = int(os.environ.get('PORT', 0)) or (8080 if RAILWAY_STATIC_URL else None)
 
 # !!!!! DEPRECATED WARNING !!!!!
 if os.environ.get('DELAY'):
@@ -211,7 +215,5 @@ bot_id: Optional[int] = None  # placeholder
 bot_peer: Optional[User] = None  # placeholder
 bot_input_peer: Optional[InputPeerUser] = None  # placeholder
 
-if os.name == "nt":  # workaround for aiodns on Windows
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
