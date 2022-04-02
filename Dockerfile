@@ -2,7 +2,14 @@ FROM python:3.10-slim AS builder
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y build-essential git
+RUN \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # initialize venv
 RUN python -m venv /opt/venv
@@ -11,11 +18,14 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # upgrade venv deps
-RUN pip install --trusted-host pypi.python.org --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir --upgrade \
+        pip \
+        setuptools \
+        wheel
 
 COPY requirements.txt /app
 
-RUN pip install --trusted-host pypi.python.org -r /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
@@ -34,6 +44,22 @@ RUN \
 #----------------------------------------
 
 FROM python:3.10-slim
+
+# install fonts
+RUN \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        fonts-wqy-microhei \
+    && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# install wkhtmltopdf  # hmmm, wkhtmltopdf works strangely...
+#RUN \
+#    apt-get update && apt-get -y install wget && \
+#    wget "https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.buster_$(dpkg --print-architecture).deb" -O /tmp/wkhtmltopdf.deb && \
+#    dpkg -i /tmp/wkhtmltopdf.deb && apt-get -f install && \
+#    rm -f /tmp/wkhtmltopdf.deb && apt-get purge wget --auto-remove
 
 WORKDIR /app
 

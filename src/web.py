@@ -1,11 +1,11 @@
 from __future__ import annotations
-from collections.abc import Callable
 from typing import Union, Optional, AnyStr, Any
-from src.compat import nullcontext, ssl_create_default_context, Final
+from typing_extensions import Final
+from collections.abc import Callable
+from .compat import nullcontext, ssl_create_default_context
 
 import re
 import asyncio
-import functools
 import aiohttp
 import feedparser
 import PIL.Image
@@ -27,8 +27,8 @@ from attr import define
 from functools import partial
 from asyncstdlib.functools import lru_cache
 
-from src import env, log, locks
-from src.i18n import i18n
+from . import env, log, locks
+from .i18n import i18n
 
 SOI: Final = b'\xff\xd8'
 EOI: Final = b'\xff\xd9'
@@ -172,8 +172,6 @@ async def __norm_callback(response: aiohttp.ClientResponse, decode: bool = False
         elif max_size is None:
             return await response.read()
         elif max_size > 0:
-            max_size = min(int(response.headers.get('Content-Length', str(max_size))),
-                           max_size)
             return await response.content.read(max_size)
     return None
 
@@ -199,7 +197,8 @@ async def get(url: str, timeout: Optional[float] = None, semaphore: Union[bool, 
             url=url, timeout=timeout, semaphore=semaphore, headers=headers,
             resp_callback=partial(__norm_callback, decode=decode, max_size=max_size,
                                   intended_content_type=intended_content_type),
-            read_bufsize=max_size or DEFAULT_READ_BUFFER_SIZE, read_until_eof=not max_size
+            read_bufsize=min(max_size, DEFAULT_READ_BUFFER_SIZE) if max_size is not None else DEFAULT_READ_BUFFER_SIZE,
+            read_until_eof=max_size is None
         ),
         wait_for_timeout)
 
@@ -309,9 +308,9 @@ async def feed_get(url: str, timeout: Optional[float] = None, web_semaphore: Uni
             rss_d = feedparser.parse(rss_content, sanitize_html=False)
         else:  # feed too large, run in another thread to avoid blocking the bot
             rss_d = await asyncio.get_event_loop().run_in_executor(_feedparser_thread_pool,
-                                                                   functools.partial(feedparser.parse,
-                                                                                     rss_content,
-                                                                                     sanitize_html=False))
+                                                                   partial(feedparser.parse,
+                                                                           rss_content,
+                                                                           sanitize_html=False))
 
         if 'title' not in rss_d.feed:
             ret.error = WebError(error_name='feed invalid', url=url, log_level=log_level)

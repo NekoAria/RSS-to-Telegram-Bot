@@ -1,5 +1,5 @@
 from __future__ import annotations
-from collections.abc import Iterator, Iterable
+from collections.abc import Iterator, Iterable, Awaitable
 from typing import Union, Optional
 
 import re
@@ -8,10 +8,16 @@ from bs4.element import NavigableString, PageElement, Tag
 from urllib.parse import urlparse
 from attr import define
 
-from src import web
-from .medium import Video, Image, Media, Animation, Audio
+from .. import web, env
+from .medium import Video, Image, Media, Animation, Audio, UploadedImage
 from .html_node import *
 from .utils import stripNewline, stripLineEnd, isAbsoluteHttpLink, resolve_relative_link, emojify, is_emoticon
+
+convert_table_to_png: Optional[Awaitable]
+if env.TABLE_TO_IMAGE:
+    from .table_drawer import convert_table_to_png
+else:
+    convert_table_to_png = None
 
 srcsetParser = re.compile(r'(?:^|,\s*)'
                           r'(?P<url>\S+)'  # allow comma here because it is valid in URL
@@ -87,7 +93,9 @@ class Parser:
             for row in rows:
                 columns = row.findAll(('td', 'th'))
                 if len(columns) != 1:
-                    return None  # only support one column
+                    if env.TABLE_TO_IMAGE:
+                        self.media.add(UploadedImage(convert_table_to_png(str(soup))))
+                    return None
                 row_content = await self._parse_item(columns[0])
                 if row_content:
                     if row_content.get_html().endswith('\n'):
@@ -244,7 +252,7 @@ class Parser:
                 return None
             if tag == 'ol':
                 return OrderedList([Br(), *texts, Br()])
-            elif tag == 'ul':
+            if tag == 'ul':
                 return UnorderedList([Br(), *texts, Br()])
 
         text = await self._parse_item(soup.children)

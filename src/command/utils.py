@@ -1,5 +1,4 @@
 from __future__ import annotations
-from re import Match
 from typing import Union, Optional, AnyStr, Any
 from collections.abc import Callable
 
@@ -16,11 +15,11 @@ from telethon.tl.functions.channels import GetParticipantRequest
 from telethon.errors import FloodError, MessageNotModifiedError, UserNotParticipantError, QueryIdInvalidError, \
     EntitiesTooLongError, MessageTooLongError
 
-from src import env, log, db, locks
-from src.i18n import i18n, ALL_LANGUAGES
+from .. import env, log, db, locks
+from ..i18n import i18n, ALL_LANGUAGES
 from . import inner
-from src.exceptions import UserBlockedErrors
-from src.compat import cached_async
+from ..errors_collection import UserBlockedErrors
+from ..compat import cached_async
 
 logger = log.getLogger('RSStT.command')
 
@@ -356,7 +355,7 @@ def command_gatekeeper(func: Optional[Callable] = None,
             await user_and_chat_permission_check()
 
             # operating channel/group in private chat, firstly get base info
-            pattern_match: Match = event.pattern_match if not is_chat_action else None
+            pattern_match: re.Match = event.pattern_match if not is_chat_action else None
             target_chat_id = (pattern_match and pattern_match.groupdict().get('target')) or ''
             target_chat_id: Union[str, int, None] = target_chat_id.decode() \
                 if isinstance(target_chat_id, bytes) else target_chat_id

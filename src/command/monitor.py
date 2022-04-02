@@ -1,8 +1,9 @@
 from __future__ import annotations
 from typing import Union
+from typing_extensions import Final
 from collections.abc import MutableMapping
-from src.compat import Final
 
+import gc
 import asyncio
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
@@ -12,11 +13,11 @@ from traceback import format_exc
 from . import inner
 from .utils import escape_html
 from .inner.utils import get_hash, update_interval, deactivate_feed
-from src import log, db, env, web
-from src.exceptions import EntityNotFoundError, UserBlockedErrors
-from src.i18n import i18n
-from src.parsing.post import get_post_from_entry, Post
-from src.parsing.utils import html_space_stripper
+from .. import log, db, env, web
+from ..errors_collection import EntityNotFoundError, UserBlockedErrors
+from ..i18n import i18n
+from ..parsing.post import get_post_from_entry, Post
+from ..parsing.utils import html_space_stripper
 
 logger = log.getLogger('RSStT.monitor')
 
@@ -60,6 +61,7 @@ class MonitoringLogs:
         cls.monitoring_counts += 1
         if cls.monitoring_counts == 10:
             cls.print_summary()
+            gc.collect()
 
     @classmethod
     def print_summary(cls):
@@ -221,7 +223,7 @@ async def __monitor(feed: db.Feed) -> str:
         new_url_feed = await inner.sub.migrate_to_new_url(feed, wf.url)
         feed = new_url_feed if isinstance(new_url_feed, db.Feed) else feed
 
-    await asyncio.gather(*(__notify_all(feed, entry) for entry in updated_entries))
+    await asyncio.gather(*(__notify_all(feed, entry) for entry in updated_entries[::-1]))
 
     return UPDATED
 

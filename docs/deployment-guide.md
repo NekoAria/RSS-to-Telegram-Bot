@@ -10,6 +10,11 @@
 
 ## Option 1: Docker Compose
 
+[![Docker Image Size (tag)](https://img.shields.io/docker/image-size/rongronggg9/rss-to-telegram/latest?logo=docker)](https://hub.docker.com/r/rongronggg9/rss-to-telegram)
+[![Build status (master)](https://img.shields.io/github/workflow/status/Rongronggg9/RSS-to-Telegram-Bot/Publish%20Docker%20image/master?label=build&logo=docker)](https://github.com/Rongronggg9/RSS-to-Telegram-Bot/actions/workflows/publish-docker-image.yml?query=branch%3Amaster)
+[![Build status (dev)](https://img.shields.io/github/workflow/status/Rongronggg9/RSS-to-Telegram-Bot/Publish%20Docker%20image/dev?label=build%20%28dev%29&logo=docker)](https://github.com/Rongronggg9/RSS-to-Telegram-Bot/actions/workflows/publish-docker-image.yml?query=branch%3Adev)
+[![Docker pulls](https://img.shields.io/docker/pulls/rongronggg9/rss-to-telegram?label=pulls&logo=docker&color=informational)](https://hub.docker.com/r/rongronggg9/rss-to-telegram)
+
 For the docker images go to: https://hub.docker.com/r/rongronggg9/rss-to-telegram
 
 ### Deploy
@@ -17,7 +22,7 @@ For the docker images go to: https://hub.docker.com/r/rongronggg9/rss-to-telegra
 ```sh
 mkdir rsstt
 cd rsstt
-wget https://raw.githubusercontent.com/Rongronggg9/RSS-to-Telegram-Bot/master/docker-compose.yml.sample -O docker-compose.yml
+wget https://raw.githubusercontent.com/Rongronggg9/RSS-to-Telegram-Bot/dev/docker-compose.yml.sample -O docker-compose.yml
 vi docker-compose.yml  # fill in env variables
 docker-compose up -d
 ```
@@ -85,15 +90,72 @@ Turn to [Kaffeine](https://kaffeine.herokuapp.com/), filling your Heroku app nam
 4. Enable `Automatic deploys` (`Deploy` tab -> `Automatic deploys` -> `Enable Automatic Deploys`).
 5. Each time upstream updates, turn to your fork and switch to the branch you've deployed, then click `Fetch upstream` and `Fetch and merge`.
 
-## Option 4: Dirty run
+## Option 4: Install from PyPI / Dirty run from source
 
-Minimal: Python 3.7+ (x86 / amd64), Python 3.8+ (arm64)  
-Recommended: Python 3.9+
+### System requirements
+
+> RSStT is tested only under the recommended system requirements.
+
+|                      | **Minimum**                   | **Recommended** |
+|----------------------|-------------------------------|-----------------|
+| **Operating system** | Linux, Windows, macOS         | Linux           |
+| **Architecture**     | x86, amd64, arm64             | amd64           |
+| **Python**           | 3.7 (x84, amd64), 3.8 (arm64) | 3.9, 3.10       |
+| **Free memory**      | 128MB                         | \> 384MB        |
+
+### Prerequisites
+
+> These fonts are used for HTML table rendering (to enable it, set the environment variable `TABLE_TO_IMAGE` to `1`). You may use WenQuanYi Zen Hei, WenQuanYI Micro Hei, Noto Sans CJK, Microsoft YaHei, or SimHei.
+
+#### Debian / Ubuntu
+
+```sh
+sudo apt install -y fonts-wqy-microhei
+```
+
+#### Other Linux distributions / Windows / macOS
+
+You know what to do. However, I cannot guarantee that the fonts can be recognized properly by matplotlib.
+
+### Option 4.1: Install from PyPI
+
+[![PyPI](https://img.shields.io/pypi/v/rsstt?logo=pypi&logoColor=white)](https://pypi.org/project/rsstt/)
+[![PyPI publish status](https://img.shields.io/github/workflow/status/Rongronggg9/RSS-to-Telegram-Bot/Publish%20to%20PyPI?label=publish&logo=pypi&logoColor=white)](https://github.com/Rongronggg9/RSS-to-Telegram-Bot/actions/workflows/publish-to-pypi.yml)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/rsstt?logo=pypi&logoColor=white)](https://pypi.org/project/rsstt/)
+[![PyPI - Implementation](https://img.shields.io/pypi/implementation/rsstt?logo=python)](https://www.python.org)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/rsstt?logo=python)](https://www.python.org)
+
+> Create a virtual environment (`venv`) and activate it first if needed.
+> Default config folder is `~/.rsstt`.
+
+```sh
+pip3 install -U pip setuptools
+pip3 install rsstt
+mkdir -p ~/.rsstt
+wget https://raw.githubusercontent.com/Rongronggg9/RSS-to-Telegram-Bot/dev/.env.sample -O ~/.rsstt/.env
+vi ~/.rsstt/.env  # fill in env variables
+python3 -m rsstt
+```
+
+### Option 4.2: Dirty run from source
+
+[![GitHub repo size](https://img.shields.io/github/repo-size/Rongronggg9/RSS-to-Telegram-Bot?logo=github)](https://github.com/Rongronggg9/RSS-to-Telegram-Bot/archive/refs/heads/dev.zip)
+[![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/Rongronggg9/RSS-to-Telegram-Bot?include_prereleases&sort=semver&logo=github)](https://github.com/Rongronggg9/RSS-to-Telegram-Bot/releases)
+[![GitHub last commit (dev)](https://img.shields.io/github/last-commit/Rongronggg9/RSS-to-Telegram-Bot/dev?logo=github)](https://github.com/Rongronggg9/RSS-to-Telegram-Bot/commits/dev)
+[![GitHub commits since latest release (by SemVer including pre-releases)](https://img.shields.io/github/commits-since/Rongronggg9/RSS-to-Telegram-Bot/latest?include_prereleases&sort=semver&logo=github)](https://github.com/Rongronggg9/RSS-to-Telegram-Bot/commits/dev)
+
+> Default config folder is `./config`, default `.env` path is `./.env` (placing it inside the config folder is also supported).
 
 ```sh
 git clone https://github.com/Rongronggg9/RSS-to-Telegram-Bot.git
 cd RSS-to-Telegram-Bot
 pip3 install -r requirements.txt
+cp .env.example .env
 vi .env  # fill in env variables
 python3 -u telegramRSSbot.py
 ```
+
+###     * Advanced command line arguments
+
+- `-h`, `--help`: show the help message and exit
+- `-c`, `--config`: path to the config folder
