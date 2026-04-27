@@ -57,6 +57,7 @@ class __EffectiveOptions:
             "user_sub_limit": -1,
             "channel_or_group_sub_limit": -1,
             "sub_limit_reached_message": "",
+            "cache_expiration": 30,
         }
         self.__callbacks: defaultdict[str, list[Callable[[str, Any], NoReturn]]] = defaultdict(list)
 
@@ -87,6 +88,10 @@ class __EffectiveOptions:
     @property
     def sub_limit_reached_message(self) -> str:
         return self.get("sub_limit_reached_message")
+
+    @property
+    def cache_expiration(self) -> int:
+        return max(int(self.get("cache_expiration")), 1)
 
     def cast(self, key: str, value: Any, ignore_type_error: bool = False) -> Union[int, str, None]:
         if len(key) > 255:

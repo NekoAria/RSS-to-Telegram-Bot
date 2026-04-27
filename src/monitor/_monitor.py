@@ -24,7 +24,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from collections import defaultdict
-from itertools import islice, chain, repeat
+from itertools import chain, repeat
 
 from ._common import logger, TIMEOUT
 from ._notifier import Notifier
@@ -327,8 +327,9 @@ class Monitor(Singleton):
                 feed.title = title
                 feed_updated_fields.add('title')
 
-            new_hashes, updated_entries = inner.utils.calculate_update(feed.entry_hashes, rss_d.entries)
-            updated_entries = list(updated_entries)
+            old_hashes = await db.Cache.filter(feed=feed).values_list('entry_hash', flat=True)
+            new_entries_with_hashes, hashes_still_seen = inner.utils.calculate_update(old_hashes, rss_d.entries)
+            updated_entries = [entry for _, entry in new_entries_with_hashes]
 
             if not updated_entries:  # not updated
                 logger.debug(f'Fetched (not updated): {feed.link}')
@@ -337,8 +338,15 @@ class Monitor(Singleton):
 
             logger.debug(f'Updated: {feed.link}')
             feed.last_modified = wr.last_modified
-            feed.entry_hashes = list(islice(new_hashes, max(len(rss_d.entries) * 2, 100))) or None
-            feed_updated_fields.update({'last_modified', 'entry_hashes'})
+            feed_updated_fields.add('last_modified')
+
+            if hashes_still_seen:
+                await db.Cache.filter(feed=feed, entry_hash__in=hashes_still_seen).update(updated_at=now)
+            expiration = now - timedelta(days=db.EffectiveOptions.cache_expiration)
+            await db.Cache.filter(feed=feed, updated_at__lt=expiration).delete()
+            await db.Cache.bulk_create(
+                [db.Cache(feed=feed, entry_hash=h) for h, _ in new_entries_with_hashes]
+            )
         finally:
             if feed.error_count != new_error_count:
                 feed.error_count = new_error_count

@@ -36,6 +36,7 @@ User = models.User
 Feed = models.Feed
 Sub = models.Sub
 Option = models.Option
+Cache = models.Cache
 EffectiveOptions = effective_utils.EffectiveOptions
 EffectiveTasks = effective_utils.EffectiveTasks
 

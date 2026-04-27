@@ -104,8 +104,12 @@ async def sub(user_id: int,
                 if etag:
                     feed.etag = etag
                 feed.last_modified = wr.last_modified
-                feed.entry_hashes = list(calculate_update(old_hashes=None, entries=rss_d.entries)[0])
+                new_entries_with_hashes, _ = calculate_update(old_hashes=None, entries=rss_d.entries)
                 await feed.save()  # now we get the id
+                if new_entries_with_hashes:
+                    await db.Cache.bulk_create(
+                        [db.Cache(feed=feed, entry_hash=h) for h, _ in new_entries_with_hashes]
+                    )
                 db.effective_utils.EffectiveTasks.update(feed.id)
 
         sub_title = sub_title if feed.title != sub_title else None
@@ -336,12 +340,24 @@ async def migrate_to_new_url(feed: db.Feed, new_url: str) -> Union[bool, db.Feed
     # new_url has been occupied by another feed
     new_url_feed.state = 1
     new_url_feed.title = feed.title
-    new_url_feed.entry_hashes = feed.entry_hashes
     new_url_feed.etag = feed.etag
     new_url_feed.last_modified = feed.last_modified
     new_url_feed.error_count = 0
     new_url_feed.next_check_time = None
     await new_url_feed.save()
+
+    # migrate all caches to the new feed (skip duplicates to honor unique constraint)
+    existing_hashes = set(
+        await db.Cache.filter(feed=new_url_feed).values_list('entry_hash', flat=True)
+    )
+    old_hashes = await db.Cache.filter(feed=feed).values_list('entry_hash', flat=True)
+    caches_to_create = [
+        db.Cache(feed=new_url_feed, entry_hash=h)
+        for h in old_hashes
+        if h not in existing_hashes
+    ]
+    if caches_to_create:
+        await db.Cache.bulk_create(caches_to_create)
 
     # migrate all subs to the new feed
     tasks_migrate = []

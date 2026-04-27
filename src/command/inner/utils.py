@@ -21,7 +21,7 @@ from collections.abc import Iterable, Sequence
 import asyncio
 import re
 from collections import defaultdict
-from itertools import chain, repeat
+from itertools import chain
 from telethon import Button
 from telethon.tl.types import KeyboardButtonCallback
 
@@ -50,9 +50,18 @@ def construct_hashtags(tags: Union[Iterable[str], str]) -> str:
     return '#' + ' #'.join(tags)
 
 
-def calculate_update(old_hashes: Optional[Sequence[str]], entries: Sequence[dict]) \
-        -> tuple[Iterable[str], Iterable[dict]]:
-    new_hashes_d = {
+def calculate_update(
+        old_hashes: Optional[Iterable[str]],
+        entries: Sequence[dict],
+) -> tuple[list[tuple[str, dict]], set[str]]:
+    """
+    :param old_hashes: hashes already recorded in the DB (from the cache table)
+    :param entries: all entries currently fetched from the RSS feed
+    :return:
+        - new_entries_with_hashes: [(hash, entry), ...] entries not yet recorded
+        - hashes_still_seen: old hashes that still appear in the current RSS (to refresh updated_at)
+    """
+    rss_hashes_d: dict[str, dict] = {
         hex(crc32(guid.encode('utf-8')))[2:]: entry
         for guid, entry in (
             (
@@ -67,11 +76,10 @@ def calculate_update(old_hashes: Optional[Sequence[str]], entries: Sequence[dict
         )
         if guid
     }
-    if old_hashes:
-        new_hashes_d.update(zip(old_hashes, repeat(None)))
-    new_hashes = new_hashes_d.keys()
-    updated_entries = filter(None, new_hashes_d.values())
-    return new_hashes, updated_entries
+    old_hashes_set = set(old_hashes) if old_hashes else set()
+    new_entries_with_hashes = [(h, e) for h, e in rss_hashes_d.items() if h not in old_hashes_set]
+    hashes_still_seen = set(rss_hashes_d.keys()) & old_hashes_set
+    return new_entries_with_hashes, hashes_still_seen
 
 
 def filter_urls(urls: Optional[Iterable[str]]) -> tuple[str, ...]:
